@@ -13,6 +13,8 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.provisioning.JdbcUserDetailsManager;
 import org.springframework.security.provisioning.UserDetailsManager;
@@ -46,8 +48,8 @@ public class SecurityConfig {
     @Bean
 
     public UserDetailsService userDetailsService() {  // ✅ Remove the parameter
-        UserDetails user = User.withUsername("user").password("{noop}password").roles("USER").build();
-        UserDetails admin = User.withUsername("admin").password("{noop}password").roles("ADMIN").build();
+        UserDetails user = User.withUsername("user").password(passwordEncoder().encode("password")).roles("USER").build();
+        UserDetails admin = User.withUsername("admin").password(passwordEncoder().encode("password")).roles("ADMIN").build();
 
         JdbcUserDetailsManager jdbcUserDetailsManager = new JdbcUserDetailsManager(dataSource);
 
@@ -58,5 +60,9 @@ public class SecurityConfig {
             jdbcUserDetailsManager.createUser(admin);
 //        return new InMemoryUserDetailsManager(user,admin); for in memory
         return jdbcUserDetailsManager;  // ✅ Return THIS, not the parameter
+    }
+    @Bean
+    public PasswordEncoder passwordEncoder(){
+        return new BCryptPasswordEncoder();
     }
 }
