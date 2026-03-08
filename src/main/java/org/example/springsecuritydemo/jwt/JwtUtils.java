@@ -28,8 +28,17 @@ public class JwtUtils {
     }
 
     public String generateTokenFromUsername(UserDetails userDetails) {
+
         String username = userDetails.getUsername();
-        return Jwts.builder().subject(username).issuedAt(new Date()).expiration(new Data(new Date()).getTime() + jwtExpirationMs).signWith(key()).compact();
+        Date now = new Date();
+        Date expiryDate = new Date(now.getTime() + jwtExpirationMs);
+
+        return Jwts.builder()
+                .subject(username)
+                .issuedAt(now)
+                .expiration(expiryDate)
+                .signWith(key())
+                .compact();
     }
 
     public String getUserNameFromJwtToken(String token) {
