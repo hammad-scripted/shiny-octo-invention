@@ -2,7 +2,8 @@ package org.example.springsecuritydemo;
 
 import org.example.springsecuritydemo.jwt.AuthEntryPointJwt;
 import org.example.springsecuritydemo.jwt.AuthTokenFilter;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.example.springsecuritydemo.jwt.JwtUtils;
+import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -29,48 +30,69 @@ import javax.sql.DataSource;
 @EnableMethodSecurity
 public class SecurityConfig {
 
-    @Autowired
-    DataSource dataSource;
+    private final DataSource dataSource;
+    private final AuthEntryPointJwt unauthorizedHandler;
 
-    private AuthEntryPointJwt unauthorizedHandler;
+    public SecurityConfig(DataSource dataSource, AuthEntryPointJwt unauthorizedHandler) {
+        this.dataSource = dataSource;
+        this.unauthorizedHandler = unauthorizedHandler;
+    }
 
+    // Fix: pass JwtUtils and UserDetailsService to match the required constructor
     @Bean
-    protected AuthTokenFilter authenticationJwtTokenFilter() {
-        return new AuthTokenFilter();
+    public AuthTokenFilter authenticationJwtTokenFilter(JwtUtils jwtUtils, UserDetailsService userDetailsService) {
+        return new AuthTokenFilter(jwtUtils, userDetailsService);
     }
 
     @Bean
-    public SecurityFilterChain defaultSecurityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain defaultSecurityFilterChain(HttpSecurity http, AuthTokenFilter authTokenFilter) throws Exception {
         http
-                .authorizeHttpRequests((requests) -> requests.requestMatchers("/h2-console/**", "/api/signin").permitAll()
-                                .anyRequest().authenticated() // All URLs are protected
-                        // to make our api stateless so that they can't remember previous data
-                ).sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .exceptionHandling(exception -> exception.authenticationEntryPoint(unauthorizedHandler))
-                .headers(headers -> headers.frameOptions(HeadersConfigurer.FrameOptionsConfig::sameOrigin)).csrf(AbstractHttpConfigurer::disable).addFilterBefore(authenticationJwtTokenFilter(), UsernamePasswordAuthenticationFilter.class);
-        // Enables the default login page
-//                .formLogin(Customizer.withDefaults())
-        // Enables "Basic" authentication for API testing (Postman/curl)
-//                .httpBasic(Customizer.withDefaults());
+                .authorizeHttpRequests(requests -> requests
+                        .requestMatchers("/h2-console/**", "/api/signin").permitAll()
+                        .anyRequest().authenticated()
+                )
+                .sessionManagement(session -> session
+                        .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+                )
+                .exceptionHandling(exception -> exception
+                        .authenticationEntryPoint(unauthorizedHandler)
+                )
+                .headers(headers -> headers
+                        .frameOptions(HeadersConfigurer.FrameOptionsConfig::sameOrigin)
+                )
+                .csrf(AbstractHttpConfigurer::disable)
+                .addFilterBefore(authTokenFilter, UsernamePasswordAuthenticationFilter.class); // Fix: inject bean, don't call method directly
 
         return http.build();
     }
 
     @Bean
+    public UserDetailsService userDetailsService() {
+        return new JdbcUserDetailsManager(dataSource);
+    }
 
-    public UserDetailsService userDetailsService() {  // ✅ Remove the parameter
-        UserDetails user = User.withUsername("user").password(passwordEncoder().encode("password")).roles("USER").build();
-        UserDetails admin = User.withUsername("admin").password(passwordEncoder().encode("password")).roles("ADMIN").build();
+    @Bean
+    public CommandLineRunner initData(UserDetailsService userDetailsService) {
+        return args -> {
+            JdbcUserDetailsManager manager = (JdbcUserDetailsManager) userDetailsService;
 
-        JdbcUserDetailsManager jdbcUserDetailsManager = new JdbcUserDetailsManager(dataSource);
+            UserDetails user = User.withUsername("user")
+                    .password(passwordEncoder().encode("password"))
+                    .roles("USER")
+                    .build();
 
-        if (!jdbcUserDetailsManager.userExists("user"))
-            jdbcUserDetailsManager.createUser(user);
+            UserDetails admin = User.withUsername("admin")
+                    .password(passwordEncoder().encode("admin"))
+                    .roles("ADMIN")
+                    .build();
 
-        if (!jdbcUserDetailsManager.userExists("admin"))
-            jdbcUserDetailsManager.createUser(admin);
-//        return new InMemoryUserDetailsManager(user,admin); for in memory
-        return jdbcUserDetailsManager;  // ✅ Return THIS, not the parameter
+            if (!manager.userExists("user")) {
+                manager.createUser(user);
+            }
+            if (!manager.userExists("admin")) {
+                manager.createUser(admin);
+            }
+        };
     }
 
     @Bean
@@ -79,7 +101,7 @@ public class SecurityConfig {
     }
 
     @Bean
-    public AuthenticationManager authenticationManager(AuthenticationConfiguration builder) throws Exception {
-        return builder.getAuthenticationManager();
+    public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
+        return config.getAuthenticationManager();
     }
 }
