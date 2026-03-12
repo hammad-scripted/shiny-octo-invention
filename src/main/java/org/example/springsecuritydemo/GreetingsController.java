@@ -3,6 +3,7 @@ package org.example.springsecuritydemo;
 import org.example.springsecuritydemo.jwt.JwtUtils;
 import org.example.springsecuritydemo.jwt.LoginRequest;
 import org.example.springsecuritydemo.jwt.LoginResponse;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -22,14 +23,10 @@ import java.util.stream.Collectors;
 @RequestMapping("/api")
 public class GreetingsController {
 
-    private final AuthenticationManager authenticationManager;
-    private final JwtUtils jwtUtils;
-
-    // Constructor injection (preferred over @Autowired field injection)
-    public GreetingsController(AuthenticationManager authenticationManager, JwtUtils jwtUtils) {
-        this.authenticationManager = authenticationManager;
-        this.jwtUtils = jwtUtils;
-    }
+    @Autowired
+    private AuthenticationManager authenticationManager;
+    @Autowired
+    private  JwtUtils jwtUtils;
 
     // Public endpoint
     @GetMapping("/hello")
